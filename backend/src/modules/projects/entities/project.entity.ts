@@ -23,7 +23,11 @@ export class Project {
   @Column({ type: 'text', nullable: true })
   description: string;
 
-  @Column({ type: 'enum', enum: ProjectStatus, default: ProjectStatus.PLANNING })
+  @Column({
+    type: 'enum',
+    enum: ProjectStatus,
+    default: ProjectStatus.PLANNING,
+  })
   status: ProjectStatus;
 
   @Column({ type: 'date', nullable: true })

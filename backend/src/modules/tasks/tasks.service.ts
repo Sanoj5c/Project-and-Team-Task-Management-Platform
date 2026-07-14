@@ -25,8 +25,13 @@ export class TasksService {
     private readonly membersRepository: Repository<ProjectMember>,
   ) {}
 
-  async create(dto: CreateTaskDto, currentUser: CurrentUserPayload): Promise<Task> {
-    const project = await this.projectsRepository.findOne({ where: { id: dto.projectId } });
+  async create(
+    dto: CreateTaskDto,
+    currentUser: CurrentUserPayload,
+  ): Promise<Task> {
+    const project = await this.projectsRepository.findOne({
+      where: { id: dto.projectId },
+    });
     if (!project) {
       throw new NotFoundException(`Project with id ${dto.projectId} not found`);
     }
@@ -51,7 +56,10 @@ export class TasksService {
     return this.findOne(saved.id, currentUser);
   }
 
-  async findAllForProject(projectId: string, currentUser: CurrentUserPayload): Promise<Task[]> {
+  async findAllForProject(
+    projectId: string,
+    currentUser: CurrentUserPayload,
+  ): Promise<Task[]> {
     const project = await this.projectsRepository.findOne({
       where: { id: projectId },
       relations: ['members'],
@@ -90,7 +98,11 @@ export class TasksService {
     return task;
   }
 
-  async update(id: string, dto: UpdateTaskDto, currentUser: CurrentUserPayload): Promise<Task> {
+  async update(
+    id: string,
+    dto: UpdateTaskDto,
+    currentUser: CurrentUserPayload,
+  ): Promise<Task> {
     const task = await this.findOne(id, currentUser);
     this.assertProjectManageAccess(task.project, currentUser);
 
@@ -112,7 +124,11 @@ export class TasksService {
   }
 
   // Team Members are only permitted to update the status of tasks assigned to them
-  async updateStatus(id: string, status: string, currentUser: CurrentUserPayload): Promise<Task> {
+  async updateStatus(
+    id: string,
+    status: string,
+    currentUser: CurrentUserPayload,
+  ): Promise<Task> {
     const task = await this.findOne(id, currentUser);
 
     const isManager =
@@ -122,7 +138,9 @@ export class TasksService {
     const isAssignee = task.assigneeId === currentUser.userId;
 
     if (!isManager && !isAssignee) {
-      throw new ForbiddenException('You can only update the status of tasks assigned to you');
+      throw new ForbiddenException(
+        'You can only update the status of tasks assigned to you',
+      );
     }
 
     task.status = status as any;
@@ -137,26 +155,42 @@ export class TasksService {
   }
 
   private async assertAssigneeIsMember(projectId: string, userId: string) {
-    const membership = await this.membersRepository.findOne({ where: { projectId, userId } });
+    const membership = await this.membersRepository.findOne({
+      where: { projectId, userId },
+    });
     if (!membership) {
       throw new BadRequestException('Assignee must be a member of the project');
     }
   }
 
-  private assertProjectReadAccess(project: Project, currentUser: CurrentUserPayload) {
+  private assertProjectReadAccess(
+    project: Project,
+    currentUser: CurrentUserPayload,
+  ) {
     if (currentUser.role === Role.ADMIN) return;
-    if (currentUser.role === Role.PROJECT_MANAGER && project.managerId === currentUser.userId) {
+    if (
+      currentUser.role === Role.PROJECT_MANAGER &&
+      project.managerId === currentUser.userId
+    ) {
       return;
     }
-    const isMember = project.members?.some((m) => m.userId === currentUser.userId);
+    const isMember = project.members?.some(
+      (m) => m.userId === currentUser.userId,
+    );
     if (!isMember) {
       throw new ForbiddenException('You do not have access to this project');
     }
   }
 
-  private assertProjectManageAccess(project: Project, currentUser: CurrentUserPayload) {
+  private assertProjectManageAccess(
+    project: Project,
+    currentUser: CurrentUserPayload,
+  ) {
     if (currentUser.role === Role.ADMIN) return;
-    if (currentUser.role === Role.PROJECT_MANAGER && project.managerId === currentUser.userId) {
+    if (
+      currentUser.role === Role.PROJECT_MANAGER &&
+      project.managerId === currentUser.userId
+    ) {
       return;
     }
     throw new ForbiddenException(

@@ -23,7 +23,10 @@ export class ProjectsController {
   // Admin and Project Managers can create projects
   @Post()
   @Roles(Role.ADMIN, Role.PROJECT_MANAGER)
-  create(@Body() dto: CreateProjectDto, @CurrentUser() user: CurrentUserPayload) {
+  create(
+    @Body() dto: CreateProjectDto,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
     return this.projectsService.create(dto, user);
   }
 

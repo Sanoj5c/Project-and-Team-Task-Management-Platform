@@ -16,7 +16,9 @@ export class ProjectMember {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => Project, (project) => project.members, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Project, (project) => project.members, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'projectId' })
   project: Project;
 

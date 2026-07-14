@@ -22,7 +22,10 @@ export class ProjectsService {
     private readonly membersRepository: Repository<ProjectMember>,
   ) {}
 
-  async create(dto: CreateProjectDto, currentUser: CurrentUserPayload): Promise<Project> {
+  async create(
+    dto: CreateProjectDto,
+    currentUser: CurrentUserPayload,
+  ): Promise<Project> {
     const project = this.projectsRepository.create({
       name: dto.name,
       description: dto.description,
@@ -107,11 +110,17 @@ export class ProjectsService {
     await this.projectsRepository.remove(project);
   }
 
-  async addMember(projectId: string, userId: string, currentUser: CurrentUserPayload) {
+  async addMember(
+    projectId: string,
+    userId: string,
+    currentUser: CurrentUserPayload,
+  ) {
     const project = await this.findOne(projectId, currentUser);
     this.assertManageAccess(project, currentUser);
 
-    const existing = await this.membersRepository.findOne({ where: { projectId, userId } });
+    const existing = await this.membersRepository.findOne({
+      where: { projectId, userId },
+    });
     if (existing) {
       throw new ConflictException('User is already a member of this project');
     }
@@ -121,7 +130,11 @@ export class ProjectsService {
     return this.findOne(projectId, currentUser);
   }
 
-  async removeMember(projectId: string, userId: string, currentUser: CurrentUserPayload) {
+  async removeMember(
+    projectId: string,
+    userId: string,
+    currentUser: CurrentUserPayload,
+  ) {
     const project = await this.findOne(projectId, currentUser);
     this.assertManageAccess(project, currentUser);
 
@@ -139,18 +152,29 @@ export class ProjectsService {
 
   private assertReadAccess(project: Project, currentUser: CurrentUserPayload) {
     if (currentUser.role === Role.ADMIN) return;
-    if (currentUser.role === Role.PROJECT_MANAGER && project.managerId === currentUser.userId) {
+    if (
+      currentUser.role === Role.PROJECT_MANAGER &&
+      project.managerId === currentUser.userId
+    ) {
       return;
     }
-    const isMember = project.members?.some((m) => m.userId === currentUser.userId);
+    const isMember = project.members?.some(
+      (m) => m.userId === currentUser.userId,
+    );
     if (!isMember) {
       throw new ForbiddenException('You do not have access to this project');
     }
   }
 
-  private assertManageAccess(project: Project, currentUser: CurrentUserPayload) {
+  private assertManageAccess(
+    project: Project,
+    currentUser: CurrentUserPayload,
+  ) {
     if (currentUser.role === Role.ADMIN) return;
-    if (currentUser.role === Role.PROJECT_MANAGER && project.managerId === currentUser.userId) {
+    if (
+      currentUser.role === Role.PROJECT_MANAGER &&
+      project.managerId === currentUser.userId
+    ) {
       return;
     }
     throw new ForbiddenException(
