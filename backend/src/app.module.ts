@@ -12,6 +12,8 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { Project } from './modules/projects/entities/project.entity';
 import { ProjectMember } from './modules/projects/entities/project-member.entity';
+import { TasksModule } from './modules/tasks/tasks.module';
+import { Task } from './modules/tasks/entities/task.entity';
 
 @Module({
   imports: [
@@ -23,7 +25,7 @@ import { ProjectMember } from './modules/projects/entities/project-member.entity
         type: 'postgres',
         url: config.get<string>('DATABASE_URL'),
         ssl: { rejectUnauthorized: false },
-        entities: [User, Project, ProjectMember],
+        entities: [User, Project, ProjectMember, Task],
         synchronize: false,
         logging: config.get<string>('NODE_ENV') === 'development',
       }),
@@ -31,6 +33,7 @@ import { ProjectMember } from './modules/projects/entities/project-member.entity
     UsersModule,
     AuthModule,
     ProjectsModule,
+    TasksModule,
   ],
   controllers: [AppController],
   providers: [
