@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AxiosError } from "axios";
 import { Users as UsersIcon, Rocket, ClipboardList, CheckCircle2, Download, Plus, MoreVertical } from "lucide-react";
 import { getUsers } from "@/lib/users-api";
 import { getProjects } from "@/lib/projects-api";
@@ -34,10 +35,12 @@ export default function UsersPage() {
         ]);
         setUsers(usersData);
         setProjects(projectsData);
-      } catch (err: any) {
-        setError(
-          err.response?.data?.message || "Failed to load users."
-        );
+      } catch (err) {
+        const message =
+          err instanceof AxiosError
+            ? err.response?.data?.message
+            : "Failed to load users.";
+        setError(message || "Failed to load users.");
       } finally {
         setLoading(false);
       }

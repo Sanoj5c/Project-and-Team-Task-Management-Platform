@@ -5,23 +5,24 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   LayoutDashboard,
-  Users,
   FolderOpen,
+  Users,
   Settings,
   Search,
   Bell,
-  LogOut,
+  HelpCircle,
+  Plus,
 } from "lucide-react";
 import { getCurrentUser, clearAuthSession } from "@/lib/auth-api";
 
 const navItems = [
-  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/users", label: "Users", icon: Users },
-  { href: "/admin/projects", label: "Projects", icon: FolderOpen },
-  { href: "/admin/settings", label: "Settings", icon: Settings },
+  { href: "/pm", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/pm/projects", label: "My Projects", icon: FolderOpen },
+  { href: "/pm/team", label: "Team", icon: Users },
+  { href: "/pm/settings", label: "Settings", icon: Settings },
 ];
 
-export default function AdminLayout({
+export default function PmLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -32,17 +33,12 @@ export default function AdminLayout({
 
   useEffect(() => {
     const currentUser = getCurrentUser();
-    if (!currentUser || currentUser.role !== "admin") {
+    if (!currentUser || currentUser.role !== "project_manager") {
       router.push("/login");
       return;
     }
     setUser(currentUser);
   }, [router]);
-
-  function handleLogout() {
-    clearAuthSession();
-    router.push("/login");
-  }
 
   if (!user) return null;
 
@@ -53,7 +49,7 @@ export default function AdminLayout({
         <div>
           <div className="px-6 py-6">
             <h1 className="text-xl font-bold text-indigo-600">TaskFlow</h1>
-            <p className="text-xs text-gray-400 mt-0.5">SaaS Admin</p>
+            <p className="text-xs text-gray-400 mt-0.5">Enterprise Tier</p>
           </div>
 
           <nav className="px-3 space-y-1">
@@ -78,42 +74,52 @@ export default function AdminLayout({
           </nav>
         </div>
 
-        <div className="px-6 py-5 border-t border-gray-100 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-semibold">
-            {user.email.charAt(0).toUpperCase()}
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-900 truncate max-w-[140px]">
-              {user.email}
-            </p>
-            <p className="text-xs text-gray-400">Admin Panel</p>
-          </div>
+        <div className="px-3 pb-6">
+          <button
+            onClick={() => router.push("/pm/projects/new")}
+            className="w-full flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700"
+          >
+            <Plus className="w-4 h-4" />
+            New Project
+          </button>
         </div>
       </aside>
 
       {/* Main area */}
       <div className="flex-1 flex flex-col">
         <header className="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
-          <div className="relative w-full max-w-sm">
+          <div className="relative w-full max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Search tasks, users, projects..."
+              placeholder="Search tasks, projects, or team members..."
               className="w-full rounded-lg border border-gray-200 bg-gray-50 pl-10 pr-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
 
           <div className="flex items-center gap-5">
-            <button className="relative text-gray-500 hover:text-gray-700">
+            <button className="text-gray-400 hover:text-gray-600">
               <Bell className="w-5 h-5" />
-              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500" />
+            </button>
+            <button className="text-gray-400 hover:text-gray-600">
+              <HelpCircle className="w-5 h-5" />
             </button>
             <button
-              onClick={handleLogout}
-              className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-red-600"
+              onClick={() => {
+                clearAuthSession();
+                router.push("/login");
+              }}
+              className="flex items-center gap-3"
             >
-              <LogOut className="w-4 h-4" />
-              Logout
+              <div className="text-right">
+                <p className="text-sm font-semibold text-gray-900">
+                  {user.name}
+                </p>
+                <p className="text-xs text-gray-400">Project Lead</p>
+              </div>
+              <div className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-semibold">
+                {user.name.charAt(0).toUpperCase()}
+              </div>
             </button>
           </div>
         </header>

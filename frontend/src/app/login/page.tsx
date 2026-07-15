@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { AxiosError } from "axios";
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { login, saveAuthSession } from "@/lib/auth-api";
 
@@ -31,10 +32,12 @@ export default function LoginPage() {
       } else {
         router.push("/member");
       }
-    } catch (err: any) {
-      setError(
-        err.response?.data?.message || "Login failed. Please try again."
-      );
+    } catch (err) {
+      const message =
+        err instanceof AxiosError
+          ? err.response?.data?.message
+          : "Login failed. Please try again.";
+      setError(message || "Login failed. Please try again.");
     } finally {
       setLoading(false);
     }

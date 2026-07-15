@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { AxiosError } from "axios";
 import { Eye, EyeOff } from "lucide-react";
 import { register, saveAuthSession } from "@/lib/auth-api";
 
@@ -26,10 +27,12 @@ export default function RegisterPage() {
       saveAuthSession(auth);
       // Self-registration always creates a Team Member
       router.push("/member");
-    } catch (err: any) {
-      setError(
-        err.response?.data?.message || "Registration failed. Please try again."
-      );
+    } catch (err) {
+      const message =
+        err instanceof AxiosError
+          ? err.response?.data?.message
+          : "Registration failed. Please try again.";
+      setError(message || "Registration failed. Please try again.");
     } finally {
       setLoading(false);
     }

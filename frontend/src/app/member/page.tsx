@@ -6,20 +6,15 @@ import { getCurrentUser, clearAuthSession } from "@/lib/auth-api";
 
 export default function MemberDashboard() {
   const router = useRouter();
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [user, setUser] = useState<ReturnType<typeof getCurrentUser>>(null);
 
   useEffect(() => {
-    const user = getCurrentUser();
-    if (!user) {
+    const currentUser = getCurrentUser();
+    if (!currentUser || currentUser.role !== "team_member") {
       router.push("/login");
       return;
     }
-    if (user.role !== "team_member") {
-      // Wrong dashboard for this role
-      router.push("/login");
-      return;
-    }
-    setUserEmail(user.email);
+    setUser(currentUser);
   }, [router]);
 
   function handleLogout() {
@@ -27,7 +22,7 @@ export default function MemberDashboard() {
     router.push("/login");
   }
 
-  if (!userEmail) return null;
+  if (!user) return null;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -36,7 +31,7 @@ export default function MemberDashboard() {
           Team Member Dashboard
         </h1>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-600">{userEmail}</span>
+          <span className="text-sm text-gray-600">{user.email}</span>
           <button
             onClick={handleLogout}
             className="text-sm text-red-600 hover:underline"
