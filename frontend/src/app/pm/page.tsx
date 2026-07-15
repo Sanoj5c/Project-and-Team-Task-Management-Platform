@@ -1,106 +1,85 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AxiosError } from "axios";
-import { MoreHorizontal, Plus, CheckCircle2 } from "lucide-react";
-import { getProjects } from "@/lib/projects-api";
-import { Project } from "@/types";
+import { useRouter } from "next/navigation";
+import { Plus, FolderOpen, Users2 } from "lucide-react";
+import { getProjects, createProject } from "@/lib/projects-api";
+import { Project, ProjectStatus } from "@/types";
 
-const statusBadgeStyles: Record<string, string> = {
-  planning: "bg-gray-100 text-gray-600",
-  active: "bg-indigo-100 text-indigo-700",
-  on_hold: "bg-orange-100 text-orange-700",
-  completed: "bg-violet-100 text-violet-700",
+const statusStyles: Record<ProjectStatus, string> = {
+  planning: "bg-gray-100 text-gray-700",
+  active: "bg-emerald-100 text-emerald-700",
+  on_hold: "bg-amber-100 text-amber-700",
+  completed: "bg-indigo-100 text-indigo-700",
+  archived: "bg-gray-100 text-gray-500",
 };
 
-const progressBarColor: Record<string, string> = {
-  planning: "bg-gray-300",
-  active: "bg-indigo-600",
-  on_hold: "bg-orange-500",
-  completed: "bg-gray-200",
+const statusLabels: Record<ProjectStatus, string> = {
+  planning: "Planning",
+  active: "Active",
+  on_hold: "On Hold",
+  completed: "Completed",
+  archived: "Archived",
 };
-
-// Placeholder pool — swap for real assignee data once the Tasks module
-// exposes per-project members and completion counts.
-const TEAM_POOL = [
-  "Nimali Perera",
-  "Chamara Silva",
-  "Sanduni Fernando",
-  "Isuru Bandara",
-  "Tharushi Jayawardena",
-  "Dinesh Kumarasinghe",
-];
-
-function placeholderProgress(id: string, status: string) {
-  if (status === "completed") return 100;
-  // deterministic pseudo-random so it doesn't jump around on re-render
-  const hash = Array.from(id).reduce((a, c) => a + c.charCodeAt(0), 0);
-  return status === "planning" ? hash % 25 : 30 + (hash % 60);
-}
-
-function placeholderTeam(id: string) {
-  const hash = Array.from(id).reduce((a, c) => a + c.charCodeAt(0), 0);
-  const count = 2 + (hash % 3);
-  return TEAM_POOL.slice(hash % 3, hash % 3 + count);
-}
 
 export default function PmDashboardPage() {
+  const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showModal, setShowModal] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
-    async function load() {
-      try {
-        const data = await getProjects();
-        setProjects(data);
-      } catch (err) {
-        const message =
-          err instanceof AxiosError
-            ? err.response?.data?.message
-            : "Failed to load projects.";
-        setError(message || "Failed to load projects.");
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
+    loadProjects();
   }, []);
+
+  async function loadProjects() {
+    try {
+      const data = await getProjects();
+      setProjects(data);
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to load projects.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    setCreating(true);
+    try {
+      await createProject({ name: newName, description: newDescription });
+      setShowModal(false);
+      setNewName("");
+      setNewDescription("");
+      await loadProjects();
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to create project.");
+    } finally {
+      setCreating(false);
+    }
+  }
 
   if (loading) {
     return <p className="text-gray-500">Loading projects...</p>;
   }
 
-  // Static placeholder data — replace once weekly-activity and
-  // team-workload endpoints exist on the backend.
-  const weeklyActivity = [
-    { day: "Mon", value: 4 },
-    { day: "Tue", value: 7 },
-    { day: "Wed", value: 6 },
-    { day: "Thu", value: 8 },
-    { day: "Fri", value: 11 },
-    { day: "Sat", value: 5 },
-    { day: "Sun", value: 3 },
-  ];
-  const maxActivity = Math.max(...weeklyActivity.map((d) => d.value));
-
-  const teamWorkload = [
-    { name: "Nimali Perera", pct: 95 },
-    { name: "Chamara Silva", pct: 42 },
-    { name: "Isuru Bandara", pct: 15 },
-  ];
-
   return (
     <div>
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">My Projects</h1>
+          <h1 className="text-2xl font-bold text-gray-900">My Projects</h1>
           <p className="text-gray-500 mt-1">
-            Manage and track your active workflow across {projects.length}{" "}
-            current projects.
+            Projects you manage and their progress.
           </p>
         </div>
-        <button className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700">
+        <button
+          onClick={() => setShowModal(true)}
+          className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+        >
           <Plus className="w-4 h-4" />
           New Project
         </button>
@@ -112,157 +91,100 @@ export default function PmDashboardPage() {
         </div>
       )}
 
-      {/* Project cards */}
-      <div className="grid grid-cols-3 gap-5 mb-6">
-        {projects.map((project) => {
-          const progress = placeholderProgress(project.id, project.status);
-          const team = placeholderTeam(project.id);
-          const totalTasks = 20 + (progress % 20);
-          const doneTasks = Math.round((progress / 100) * totalTasks);
-
-          return (
-            <div
+      {projects.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center text-gray-400">
+          You don&apos;t manage any projects yet. Create one to get started.
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-5">
+          {projects.map((project) => (
+            <button
               key={project.id}
-              className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5"
+              onClick={() => router.push(`/pm/projects/${project.id}`)}
+              className="text-left bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition-shadow"
             >
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-start justify-between mb-3">
+                <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center">
+                  <FolderOpen className="w-4 h-4 text-indigo-600" />
+                </div>
                 <span
-                  className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusBadgeStyles[project.status]}`}
+                  className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusStyles[project.status]}`}
                 >
-                  {project.status.replace("_", " ")}
+                  {statusLabels[project.status]}
                 </span>
-                <button className="text-gray-300 hover:text-gray-500">
-                  <MoreHorizontal className="w-4 h-4" />
-                </button>
               </div>
 
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              <h3 className="font-semibold text-gray-900 mb-1">
                 {project.name}
               </h3>
+              <p className="text-sm text-gray-500 mb-4 line-clamp-2">
+                {project.description || "No description provided."}
+              </p>
 
-              <div className="flex items-center justify-between text-xs font-medium text-gray-400 mb-1.5">
-                <span>PROGRESS</span>
-                <span className="text-gray-900">{progress}%</span>
-              </div>
-              <div className="w-full h-1.5 bg-gray-100 rounded-full mb-4">
-                <div
-                  className={`h-1.5 rounded-full ${progressBarColor[project.status]}`}
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex -space-x-2">
-                  {team.slice(0, 3).map((name) => (
-                    <div
-                      key={name}
-                      className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[11px] font-semibold border-2 border-white"
-                    >
-                      {name.charAt(0)}
-                    </div>
-                  ))}
-                  {team.length > 3 && (
-                    <div className="w-7 h-7 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center text-[11px] font-semibold border-2 border-white">
-                      +{team.length - 3}
-                    </div>
-                  )}
-                </div>
-                <span className="flex items-center gap-1.5 text-xs text-gray-500">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  {doneTasks}/{totalTasks} tasks
+              <div className="flex items-center justify-between text-xs text-gray-400 border-t border-gray-50 pt-3">
+                <span className="flex items-center gap-1">
+                  <Users2 className="w-3.5 h-3.5" />
+                  {project.members?.length || 0} members
                 </span>
               </div>
-            </div>
-          );
-        })}
+            </button>
+          ))}
+        </div>
+      )}
 
-        {/* Start new project tile */}
-        <button
-          onClick={() => (window.location.href = "/pm/projects/new")}
-          className="border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center py-10 text-center hover:border-indigo-300 transition-colors"
-        >
-          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mb-3">
-            <Plus className="w-5 h-5 text-gray-500" />
-          </div>
-          <p className="text-sm font-semibold text-gray-900">
-            Start New Project
-          </p>
-          <p className="text-xs text-gray-400 mt-1 max-w-[180px]">
-            Initialize a new workflow and invite your team.
-          </p>
-        </button>
-      </div>
-
-      {/* Bottom row: weekly activity + team workload */}
-      <div className="grid grid-cols-3 gap-6">
-        <div className="col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Weekly Activity
+      {/* Create Project Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+              Create New Project
             </h2>
-            <span className="flex items-center gap-1.5 text-xs text-gray-500">
-              <span className="w-2 h-2 rounded-full bg-indigo-600" />
-              Tasks Done
-            </span>
-          </div>
-          <div className="flex items-end justify-between gap-3 h-40">
-            {weeklyActivity.map((d) => (
-              <div
-                key={d.day}
-                className="flex-1 flex flex-col items-center gap-2"
-              >
-                <div
-                  className={`w-full rounded-t-md ${
-                    d.value === maxActivity ? "bg-indigo-600" : "bg-indigo-100"
-                  }`}
-                  style={{ height: `${(d.value / maxActivity) * 100}%` }}
+            <form onSubmit={handleCreate} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 uppercase mb-1.5">
+                  Project name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="Website Redesign"
                 />
-                <span className="text-xs text-gray-400">{d.day}</span>
               </div>
-            ))}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 uppercase mb-1.5">
+                  Description
+                </label>
+                <textarea
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  rows={3}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="Brief description of the project"
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creating}
+                  className="flex-1 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {creating ? "Creating..." : "Create"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-5">
-            Team Workload
-          </h2>
-          <div className="space-y-5">
-            {teamWorkload.map((member) => (
-              <div key={member.name} className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-semibold shrink-0">
-                  {member.name.charAt(0)}
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-gray-900">
-                      {member.name}
-                    </span>
-                    <span className="text-sm text-gray-500">
-                      {member.pct}%
-                    </span>
-                  </div>
-                  <div className="w-full h-1.5 bg-gray-100 rounded-full">
-                    <div
-                      className={`h-1.5 rounded-full ${
-                        member.pct > 90
-                          ? "bg-red-500"
-                          : member.pct > 50
-                            ? "bg-indigo-600"
-                            : "bg-gray-300"
-                      }`}
-                      style={{ width: `${member.pct}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <button className="text-sm text-indigo-600 font-medium mt-5 hover:underline">
-            View All Members
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
