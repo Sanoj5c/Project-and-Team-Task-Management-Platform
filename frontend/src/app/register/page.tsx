@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { AxiosError } from "axios";
@@ -48,18 +47,20 @@ function getErrorMessage(
 }
 
 export default function RegisterPage() {
-  const router = useRouter();
-
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [password, setPassword] =
+    useState("");
 
   const [showPassword, setShowPassword] =
     useState(false);
 
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] =
+    useState("");
+
+  const [loading, setLoading] =
+    useState(false);
 
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>,
@@ -94,7 +95,6 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      // Remove any old logged-in user's session.
       clearAuthSession();
 
       await register({
@@ -103,7 +103,6 @@ export default function RegisterPage() {
         password,
       });
 
-      // Registration must not automatically log in the new user.
       clearAuthSession();
 
       setSuccess(
@@ -115,7 +114,9 @@ export default function RegisterPage() {
       setPassword("");
 
       window.setTimeout(() => {
-        router.replace(
+        clearAuthSession();
+
+        window.location.assign(
           `/login?registered=true&email=${encodeURIComponent(
             trimmedEmail,
           )}`,
@@ -246,7 +247,9 @@ export default function RegisterPage() {
                 minLength={8}
                 value={password}
                 onChange={(event) =>
-                  setPassword(event.target.value)
+                  setPassword(
+                    event.target.value,
+                  )
                 }
                 disabled={loading}
                 placeholder="••••••••"
@@ -284,7 +287,9 @@ export default function RegisterPage() {
 
           <button
             type="submit"
-            disabled={loading || Boolean(success)}
+            disabled={
+              loading || Boolean(success)
+            }
             className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading
