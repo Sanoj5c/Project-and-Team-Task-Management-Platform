@@ -52,18 +52,14 @@ export default function RegisterPage() {
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] =
-    useState("");
+  const [password, setPassword] = useState("");
 
   const [showPassword, setShowPassword] =
     useState(false);
 
   const [error, setError] = useState("");
-  const [success, setSuccess] =
-    useState("");
-
-  const [loading, setLoading] =
-    useState(false);
+  const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
 
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>,
@@ -98,7 +94,7 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      // Remove any previously saved login session.
+      // Remove any old logged-in user's session.
       clearAuthSession();
 
       await register({
@@ -107,7 +103,7 @@ export default function RegisterPage() {
         password,
       });
 
-      // Make sure registration does not keep any tokens.
+      // Registration must not automatically log in the new user.
       clearAuthSession();
 
       setSuccess(
@@ -156,8 +152,7 @@ export default function RegisterPage() {
       </h1>
 
       <p className="mb-8 text-center text-gray-500">
-        Join the world&apos;s most focused
-        productivity suite.
+        Join the world&apos;s most focused productivity suite.
       </p>
 
       <div className="w-full max-w-md rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:p-10">
@@ -251,9 +246,7 @@ export default function RegisterPage() {
                 minLength={8}
                 value={password}
                 onChange={(event) =>
-                  setPassword(
-                    event.target.value,
-                  )
+                  setPassword(event.target.value)
                 }
                 disabled={loading}
                 placeholder="••••••••"
