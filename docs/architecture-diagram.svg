@@ -1,0 +1,63 @@
+<svg width="1000" height="560" viewBox="0 0 1000 560" xmlns="http://www.w3.org/2000/svg" font-family="Arial, Helvetica, sans-serif">
+  <rect width="1000" height="560" fill="#ffffff"/>
+  <text x="500" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#1a1a1a">System Architecture — TaskFlow Platform</text>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#333" stroke-width="1.5"/>
+    </marker>
+  </defs>
+
+  <!-- Browser -->
+  <rect x="60" y="90" width="180" height="80" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="1"/>
+  <text x="150" y="125" text-anchor="middle" font-size="13" font-weight="bold" fill="#2C2C2A">Browser</text>
+  <text x="150" y="145" text-anchor="middle" font-size="11" fill="#444441">End user (Admin / PM /</text>
+  <text x="150" y="160" text-anchor="middle" font-size="11" fill="#444441">Team Member)</text>
+
+  <!-- Frontend (Netlify) -->
+  <rect x="330" y="90" width="220" height="100" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="1"/>
+  <text x="440" y="118" text-anchor="middle" font-size="13" font-weight="bold" fill="#26215C">Frontend</text>
+  <text x="440" y="136" text-anchor="middle" font-size="11" fill="#3C3489">Next.js 16 (App Router)</text>
+  <text x="440" y="152" text-anchor="middle" font-size="11" fill="#3C3489">Tailwind CSS + Axios</text>
+  <text x="440" y="172" text-anchor="middle" font-size="10" fill="#534AB7" font-style="italic">Hosted on Netlify</text>
+
+  <!-- Backend (Railway) -->
+  <rect x="640" y="90" width="230" height="100" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="1"/>
+  <text x="755" y="118" text-anchor="middle" font-size="13" font-weight="bold" fill="#04342C">Backend API</text>
+  <text x="755" y="136" text-anchor="middle" font-size="11" fill="#085041">NestJS REST API</text>
+  <text x="755" y="152" text-anchor="middle" font-size="11" fill="#085041">TypeORM + JWT + Passport</text>
+  <text x="755" y="172" text-anchor="middle" font-size="10" fill="#0F6E56" font-style="italic">Hosted on Railway</text>
+
+  <!-- Database (Neon) -->
+  <rect x="695" y="280" width="180" height="90" rx="8" fill="#FAEEDA" stroke="#854F0B" stroke-width="1"/>
+  <text x="785" y="310" text-anchor="middle" font-size="13" font-weight="bold" fill="#412402">PostgreSQL</text>
+  <text x="785" y="328" text-anchor="middle" font-size="11" fill="#633806">Neon (serverless)</text>
+  <text x="785" y="346" text-anchor="middle" font-size="10" fill="#854F0B" font-style="italic">users, projects, project_members, tasks</text>
+
+  <!-- Arrows -->
+  <line x1="240" y1="130" x2="328" y2="130" stroke="#333" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="284" y="122" text-anchor="middle" font-size="10" fill="#333">renders UI</text>
+
+  <line x1="550" y1="130" x2="638" y2="130" stroke="#333" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="594" y="115" text-anchor="middle" font-size="10" fill="#333">HTTPS REST</text>
+  <text x="594" y="122" text-anchor="middle" font-size="9" fill="#666">/api/v1/...</text>
+
+  <line x1="755" y1="190" x2="785" y2="278" stroke="#333" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="820" y="235" text-anchor="middle" font-size="10" fill="#333">TypeORM</text>
+  <text x="820" y="248" text-anchor="middle" font-size="9" fill="#666">SSL connection</text>
+
+  <!-- JWT auth flow box -->
+  <rect x="330" y="260" width="330" height="180" rx="8" fill="#FAECE7" stroke="#993C1D" stroke-width="1"/>
+  <text x="495" y="285" text-anchor="middle" font-size="12" font-weight="bold" fill="#4A1B0C">JWT authentication flow</text>
+  <text x="345" y="310" font-size="10.5" fill="#712B13">1. User submits login credentials</text>
+  <text x="345" y="330" font-size="10.5" fill="#712B13">2. Backend verifies password (bcrypt)</text>
+  <text x="345" y="350" font-size="10.5" fill="#712B13">3. Issues access token (15m) + refresh token (7d)</text>
+  <text x="345" y="370" font-size="10.5" fill="#712B13">4. Frontend stores tokens, attaches access token</text>
+  <text x="345" y="386" font-size="10.5" fill="#712B13">   as Bearer header on every request</text>
+  <text x="345" y="406" font-size="10.5" fill="#712B13">5. On 401, Axios interceptor auto-refreshes</text>
+  <text x="345" y="422" font-size="10.5" fill="#712B13">   using the refresh token and retries</text>
+
+  <!-- Legend -->
+  <text x="60" y="480" font-size="10" fill="#555">Global guards enforce role-based access (Admin / Project Manager / Team Member) on every protected route.</text>
+  <text x="60" y="500" font-size="10" fill="#555">CORS is restricted on the backend to the deployed frontend origin only.</text>
+</svg>
