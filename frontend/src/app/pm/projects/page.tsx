@@ -394,12 +394,12 @@ export default function PmProjectsPage() {
               ? new Date(
                   `${form.startDate}T00:00:00`,
                 ).toISOString()
-              : null,
+              : undefined,
             endDate: form.endDate
               ? new Date(
                   `${form.endDate}T23:59:59`,
                 ).toISOString()
-              : null,
+              : undefined,
           },
         );
 
