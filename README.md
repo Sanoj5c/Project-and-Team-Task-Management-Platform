@@ -4,7 +4,7 @@ A full-stack project management platform with role-based access control (Admin /
 
 ## Live Demo
 
-- **Frontend:** https://chic-macaron-0a1e3c.netlify.app
+- **Frontend:** https://taskflow-platform.netlify.app
 - **Backend API:** https://project-and-team-task-management-platform-production-6c5b.up.railway.app
 - **API Docs (Swagger):** https://project-and-team-task-management-platform-production-6c5b.up.railway.app/api/docs
 
