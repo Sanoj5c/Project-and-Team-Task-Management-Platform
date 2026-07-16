@@ -1,0 +1,1 @@
+export { default } from "../../../pm/projects/[id]/page";

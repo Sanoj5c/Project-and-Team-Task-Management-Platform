@@ -1,121 +1,280 @@
 "use client";
 
 import { useState } from "react";
+import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { AxiosError } from "axios";
-import { Eye, EyeOff } from "lucide-react";
-import { register, saveAuthSession } from "@/lib/auth-api";
+import {
+  CheckCircle2,
+  Eye,
+  EyeOff,
+} from "lucide-react";
+
+import { register } from "@/lib/auth-api";
+
+type ApiErrorResponse = {
+  message?: string | string[];
+};
+
+function getErrorMessage(
+  error: unknown,
+  fallback: string,
+): string {
+  if (error instanceof AxiosError) {
+    const responseData = error.response
+      ?.data as ApiErrorResponse | undefined;
+
+    const message = responseData?.message;
+
+    if (Array.isArray(message)) {
+      return message.join(", ");
+    }
+
+    if (typeof message === "string") {
+      return message;
+    }
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return fallback;
+}
 
 export default function RegisterPage() {
   const router = useRouter();
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [password, setPassword] =
+    useState("");
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  const [showPassword, setShowPassword] =
+    useState(false);
+
+  const [error, setError] = useState("");
+  const [success, setSuccess] =
+    useState("");
+
+  const [loading, setLoading] =
+    useState(false);
+
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> {
+    event.preventDefault();
+
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+
     setError("");
+    setSuccess("");
+
+    if (trimmedName.length < 2) {
+      setError(
+        "Full name must contain at least 2 characters.",
+      );
+      return;
+    }
+
+    if (!trimmedEmail) {
+      setError("Email address is required.");
+      return;
+    }
+
+    if (password.length < 8) {
+      setError(
+        "Password must contain at least 8 characters.",
+      );
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const auth = await register({ name, email, password });
-      saveAuthSession(auth);
-      // Self-registration always creates a Team Member
-      router.push("/member");
-    } catch (err) {
-      const message =
-        err instanceof AxiosError
-          ? err.response?.data?.message
-          : "Registration failed. Please try again.";
-      setError(message || "Registration failed. Please try again.");
+      await register({
+        name: trimmedName,
+        email: trimmedEmail,
+        password,
+      });
+
+      setSuccess(
+        "Account created successfully. Redirecting to login...",
+      );
+
+      setName("");
+      setEmail("");
+      setPassword("");
+
+      window.setTimeout(() => {
+        router.replace(
+          `/login?registered=true&email=${encodeURIComponent(
+            trimmedEmail,
+          )}`,
+        );
+      }, 1200);
+    } catch (caughtError: unknown) {
+      setError(
+        getErrorMessage(
+          caughtError,
+          "Registration failed. Please try again.",
+        ),
+      );
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4 py-12">
-      {/* Logo badge */}
-      <div className="flex justify-center mb-6">
-        <div className="w-20 h-20 rounded-2xl bg-white border border-gray-100 shadow-sm flex items-center justify-center">
-          <Image src="/logo.png" alt="TaskFlow" width={56} height={13} />
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4 py-12">
+      <div className="mb-6 flex justify-center">
+        <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <Image
+            src="/logo.png"
+            alt="TaskFlow"
+            width={56}
+            height={13}
+            priority
+          />
         </div>
       </div>
 
-      <h1 className="text-2xl font-bold text-gray-900 text-center mb-2">
+      <h1 className="mb-2 text-center text-2xl font-bold text-gray-900">
         Create your TaskFlow account
       </h1>
-      <p className="text-gray-500 text-center mb-8">
-        Join the world&apos;s most focused productivity suite.
+
+      <p className="mb-8 text-center text-gray-500">
+        Join the world&apos;s most focused
+        productivity suite.
       </p>
 
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-gray-100 p-10">
+      <div className="w-full max-w-md rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:p-10">
         {error && (
-          <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div
+            role="alert"
+            className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          >
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        {success && (
+          <div
+            role="status"
+            className="mb-4 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"
+          >
+            <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+            {success}
+          </div>
+        )}
+
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-5"
+        >
           <div>
-            <label className="block text-xs font-medium tracking-wide text-gray-500 uppercase mb-2">
+            <label
+              htmlFor="register-name"
+              className="mb-2 block text-xs font-medium uppercase tracking-wide text-gray-500"
+            >
               Full name
             </label>
+
             <input
+              id="register-name"
               type="text"
               required
+              minLength={2}
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(event) =>
+                setName(event.target.value)
+              }
+              disabled={loading}
               placeholder="John Doe"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              autoComplete="name"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-gray-50"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium tracking-wide text-gray-500 uppercase mb-2">
+            <label
+              htmlFor="register-email"
+              className="mb-2 block text-xs font-medium uppercase tracking-wide text-gray-500"
+            >
               Email address
             </label>
+
             <input
+              id="register-email"
               type="email"
               required
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(event) =>
+                setEmail(event.target.value)
+              }
+              disabled={loading}
               placeholder="name@company.com"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              autoComplete="email"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-gray-50"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium tracking-wide text-gray-500 uppercase mb-2">
+            <label
+              htmlFor="register-password"
+              className="mb-2 block text-xs font-medium uppercase tracking-wide text-gray-500"
+            >
               Password
             </label>
+
             <div className="relative">
               <input
-                type={showPassword ? "text" : "password"}
+                id="register-password"
+                type={
+                  showPassword
+                    ? "text"
+                    : "password"
+                }
                 required
                 minLength={8}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(event) =>
+                  setPassword(
+                    event.target.value,
+                  )
+                }
+                disabled={loading}
                 placeholder="••••••••"
-                className="w-full rounded-lg border border-gray-300 px-3 pr-10 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                autoComplete="new-password"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 pr-10 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-gray-50"
               />
+
               <button
                 type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                onClick={() =>
+                  setShowPassword(
+                    (current) => !current,
+                  )
+                }
+                disabled={loading}
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded text-gray-400 hover:text-gray-600 disabled:cursor-not-allowed"
+                aria-label={
+                  showPassword
+                    ? "Hide password"
+                    : "Show password"
+                }
               >
                 {showPassword ? (
-                  <EyeOff className="w-4 h-4" />
+                  <EyeOff className="h-4 w-4" />
                 ) : (
-                  <Eye className="w-4 h-4" />
+                  <Eye className="h-4 w-4" />
                 )}
               </button>
             </div>
+
             <p className="mt-1.5 text-xs text-gray-400">
               At least 8 characters
             </p>
@@ -123,17 +282,24 @@ export default function RegisterPage() {
 
           <button
             type="submit"
-            disabled={loading}
-            className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            disabled={loading || Boolean(success)}
+            className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? "Creating account..." : "Create account"}
+            {loading
+              ? "Creating account..."
+              : success
+                ? "Account created"
+                : "Create account"}
           </button>
         </form>
       </div>
 
       <p className="mt-6 text-sm text-gray-500">
         Already have an account?{" "}
-        <Link href="/login" className="text-indigo-600 font-medium hover:underline">
+        <Link
+          href="/login"
+          className="font-medium text-indigo-600 hover:underline"
+        >
           Log in
         </Link>
       </p>
