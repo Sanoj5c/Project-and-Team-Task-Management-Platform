@@ -97,13 +97,13 @@ See `backend/.env.example` and `frontend/.env.example` for the full list of requ
 
 ## AI Tool Usage Disclosure
 
-This project was built with substantial assistance from **Claude (Anthropic)**, used for:
-- Debugging deployment issues across Render, Railway, and Netlify (port configuration, environment variable setup, CORS configuration, and Next.js build/publish directory misconfigurations)
-- Drafting and reviewing code for new frontend pages (e.g. Settings and Team pages)
-- Writing this README, feature completion report, and CI/CD workflow documentation
-- General debugging guidance throughout backend and frontend development
+This project was built with assistance from multiple AI tools:
 
-All core application logic (authentication, RBAC, database schema, CRUD endpoints, and UI implementation) was developed by the candidate, with Claude used as a pair-programming and troubleshooting aid rather than for autonomous code generation of core features.
+- **Claude (Anthropic):** Used for debugging deployment issues across Render, Railway, and Netlify (port configuration, environment variable setup, CORS configuration, and Next.js build/publish directory misconfigurations); drafting new frontend pages (e.g. Settings and Team pages); and writing this README, feature completion report, and CI/CD workflow documentation.
+- **ChatGPT (OpenAI):** Used during development to help debug and explain issues encountered while building backend and frontend features.
+- **Google Stitch:** Used to generate UI mockups and design references that informed the frontend's visual layout.
+
+All core application logic (authentication, RBAC, database schema, CRUD endpoints, and UI implementation) was developed by the candidate, with AI tools used as debugging, design-reference, and documentation aids rather than for autonomous generation of core features.
 
 ## License
 
