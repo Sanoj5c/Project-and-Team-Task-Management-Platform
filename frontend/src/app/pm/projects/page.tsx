@@ -1,143 +1,133 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import type { FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { AxiosError } from "axios";
+import {
+  CalendarDays,
+  CheckCircle2,
+  Eye,
+  FolderOpen,
+  MoreVertical,
+  Pencil,
+  Plus,
+  Trash2,
+  Users2,
+  X,
+} from "lucide-react";
 
-type ProjectMemberUser = {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  isActive: boolean;
-};
+import {
+  createProject,
+  deleteProject,
+  getProjects,
+  updateProject,
+  type CreateProjectPayload,
+} from "@/lib/projects-api";
 
-type ProjectMember = {
-  id?: string;
-  projectId?: string;
-  userId?: string;
-  user?: ProjectMemberUser;
-};
-
-type ProjectManager = {
-  id: string;
-  name: string;
-  email: string;
-};
-
-type Project = {
-  id: string;
-  name: string;
-  description?: string | null;
-  status?: string | null;
-  startDate?: string | null;
-  endDate?: string | null;
-  createdAt?: string;
-  updatedAt?: string;
-  managerId?: string;
-  manager?: ProjectManager;
-  members?: ProjectMember[];
-};
+import type {
+  Project,
+  ProjectStatus,
+} from "@/types";
 
 type ApiErrorResponse = {
   message?: string | string[];
 };
 
-type CreateProjectForm = {
+type ProjectForm = {
   name: string;
   description: string;
+  status: ProjectStatus;
   startDate: string;
   endDate: string;
 };
 
-const API_URL = (
-  process.env.NEXT_PUBLIC_API_URL ??
-  "http://localhost:3000/api/v1"
-).replace(/\/$/, "");
-
-const initialForm: CreateProjectForm = {
+const emptyForm: ProjectForm = {
   name: "",
   description: "",
+  status: "planning",
   startDate: "",
   endDate: "",
 };
 
-function getAccessToken(): string | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
+const statusStyles: Record<
+  ProjectStatus,
+  string
+> = {
+  planning: "bg-gray-100 text-gray-700",
+  active: "bg-emerald-100 text-emerald-700",
+  on_hold: "bg-amber-100 text-amber-700",
+  completed: "bg-indigo-100 text-indigo-700",
+  archived: "bg-gray-100 text-gray-500",
+};
 
-  return (
-    localStorage.getItem("accessToken") ??
-    localStorage.getItem("access_token") ??
-    localStorage.getItem("token")
-  );
-}
+const statusLabels: Record<
+  ProjectStatus,
+  string
+> = {
+  planning: "Planning",
+  active: "Active",
+  on_hold: "On Hold",
+  completed: "Completed",
+  archived: "Archived",
+};
 
 function getErrorMessage(
-  body: ApiErrorResponse,
+  error: unknown,
   fallback: string,
 ): string {
-  if (Array.isArray(body.message)) {
-    return body.message.join(", ");
+  if (error instanceof AxiosError) {
+    const responseData = error.response
+      ?.data as ApiErrorResponse | undefined;
+
+    const message = responseData?.message;
+
+    if (Array.isArray(message)) {
+      return message.join(", ");
+    }
+
+    if (typeof message === "string") {
+      return message;
+    }
   }
 
-  return body.message ?? fallback;
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return fallback;
 }
 
-function formatStatus(status?: string | null): string {
-  if (!status) {
-    return "Planning";
+function toDateInputValue(
+  value?: string | null,
+): string {
+  if (!value) {
+    return "";
   }
 
-  return status
-    .split("_")
-    .map(
-      (word) =>
-        word.charAt(0).toUpperCase() + word.slice(1),
-    )
-    .join(" ");
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return date.toISOString().split("T")[0];
 }
 
-function getStatusClasses(status?: string | null): string {
-  const normalizedStatus = status?.toLowerCase();
-
-  if (
-    normalizedStatus === "completed" ||
-    normalizedStatus === "done"
-  ) {
-    return "bg-green-100 text-green-700";
-  }
-
-  if (
-    normalizedStatus === "in_progress" ||
-    normalizedStatus === "active"
-  ) {
-    return "bg-blue-100 text-blue-700";
-  }
-
-  if (
-    normalizedStatus === "on_hold" ||
-    normalizedStatus === "paused"
-  ) {
-    return "bg-yellow-100 text-yellow-700";
-  }
-
-  if (normalizedStatus === "cancelled") {
-    return "bg-red-100 text-red-700";
-  }
-
-  return "bg-purple-100 text-purple-700";
-}
-
-function formatDate(date?: string | null): string {
-  if (!date) {
+function formatDate(
+  value?: string | null,
+): string {
+  if (!value) {
     return "Not set";
   }
 
-  const parsedDate = new Date(date);
+  const date = new Date(value);
 
-  if (Number.isNaN(parsedDate.getTime())) {
+  if (Number.isNaN(date.getTime())) {
     return "Not set";
   }
 
@@ -145,150 +135,96 @@ function formatDate(date?: string | null): string {
     year: "numeric",
     month: "short",
     day: "numeric",
-  }).format(parsedDate);
+  }).format(date);
 }
 
-function getInitials(name: string): string {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join("");
-}
+export default function PmProjectsPage() {
+  const router = useRouter();
 
-export default function ProjectManagerProjectsPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [search, setSearch] = useState("");
+  const [projects, setProjects] =
+    useState<Project[]>([]);
 
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const [loading, setLoading] =
+    useState(true);
+
+  const [creating, setCreating] =
+    useState(false);
+
+  const [updating, setUpdating] =
+    useState(false);
+
+  const [deletingProjectId, setDeletingProjectId] =
+    useState<string | null>(null);
+
+  const [completingProjectId, setCompletingProjectId] =
+    useState<string | null>(null);
+
+  const [openActionProjectId, setOpenActionProjectId] =
+    useState<string | null>(null);
 
   const [showCreateModal, setShowCreateModal] =
     useState(false);
 
+  const [editingProject, setEditingProject] =
+    useState<Project | null>(null);
+
   const [form, setForm] =
-    useState<CreateProjectForm>(initialForm);
+    useState<ProjectForm>(emptyForm);
 
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-
-  async function loadProjects(
-    showRefreshLoader = false,
-  ): Promise<void> {
-    const token = getAccessToken();
-
-    if (!token) {
-      setError(
-        "You are not logged in. Please log in again.",
-      );
-      setLoading(false);
-      return;
-    }
-
-    if (showRefreshLoader) {
-      setRefreshing(true);
-    }
-
-    try {
-      const response = await fetch(`${API_URL}/projects`, {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        cache: "no-store",
-      });
-
-      const body = (await response.json()) as
-        | Project[]
-        | ApiErrorResponse;
-
-      if (!response.ok) {
-        throw new Error(
-          getErrorMessage(
-            body as ApiErrorResponse,
-            "Failed to load projects.",
-          ),
-        );
-      }
-
-      setProjects(body as Project[]);
-      setError("");
-    } catch (caughtError: unknown) {
-      setError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Failed to load projects.",
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }
+  const [success, setSuccess] =
+    useState("");
 
   useEffect(() => {
     void loadProjects();
   }, []);
 
-  const filteredProjects = useMemo(() => {
-    const query = search.trim().toLowerCase();
+  async function loadProjects(): Promise<void> {
+    try {
+      setLoading(true);
+      setError("");
 
-    if (!query) {
-      return projects;
-    }
-
-    return projects.filter((project) => {
-      const projectName = project.name.toLowerCase();
-      const description =
-        project.description?.toLowerCase() ?? "";
-      const status = project.status?.toLowerCase() ?? "";
-
-      return (
-        projectName.includes(query) ||
-        description.includes(query) ||
-        status.includes(query)
+      const data = await getProjects();
+      setProjects(data);
+    } catch (caughtError: unknown) {
+      setError(
+        getErrorMessage(
+          caughtError,
+          "Failed to load projects.",
+        ),
       );
-    });
-  }, [projects, search]);
+    } finally {
+      setLoading(false);
+    }
+  }
 
-  const totalMembers = useMemo(() => {
-    const memberIds = new Set<string>();
+  const statistics = useMemo(
+    () => ({
+      total: projects.length,
+      active: projects.filter(
+        (project) =>
+          project.status === "active",
+      ).length,
+      completed: projects.filter(
+        (project) =>
+          project.status === "completed",
+      ).length,
+      members: new Set(
+        projects.flatMap((project) =>
+          (project.members ?? []).map(
+            (member) => member.userId,
+          ),
+        ),
+      ).size,
+    }),
+    [projects],
+  );
 
-    projects.forEach((project) => {
-      project.members?.forEach((membership) => {
-        const id =
-          membership.user?.id ?? membership.userId;
-
-        if (id) {
-          memberIds.add(id);
-        }
-      });
-    });
-
-    return memberIds.size;
-  }, [projects]);
-
-  const activeProjects = projects.filter((project) => {
-    const status = project.status?.toLowerCase();
-
-    return (
-      status === "active" ||
-      status === "in_progress" ||
-      status === "in progress"
-    );
-  }).length;
-
-  const completedProjects = projects.filter((project) => {
-    const status = project.status?.toLowerCase();
-
-    return status === "completed" || status === "done";
-  }).length;
-
-  function updateForm(
-    field: keyof CreateProjectForm,
-    value: string,
+  function updateForm<
+    K extends keyof ProjectForm,
+  >(
+    field: K,
+    value: ProjectForm[K],
   ): void {
     setForm((currentForm) => ({
       ...currentForm,
@@ -297,48 +233,84 @@ export default function ProjectManagerProjectsPage() {
   }
 
   function openCreateModal(): void {
-    setForm(initialForm);
+    setForm(emptyForm);
+    setEditingProject(null);
+    setOpenActionProjectId(null);
     setError("");
     setSuccess("");
     setShowCreateModal(true);
   }
 
   function closeCreateModal(): void {
-    if (!creating) {
-      setShowCreateModal(false);
-      setForm(initialForm);
-    }
-  }
-
-  async function handleCreateProject(
-    event: FormEvent<HTMLFormElement>,
-  ): Promise<void> {
-    event.preventDefault();
-
-    const token = getAccessToken();
-
-    if (!token) {
-      setError(
-        "You are not logged in. Please log in again.",
-      );
+    if (creating) {
       return;
     }
 
+    setShowCreateModal(false);
+    setForm(emptyForm);
+  }
+
+  function openEditModal(
+    project: Project,
+  ): void {
+    setEditingProject(project);
+
+    setForm({
+      name: project.name,
+      description:
+        project.description ?? "",
+      status: project.status,
+      startDate: toDateInputValue(
+        project.startDate,
+      ),
+      endDate: toDateInputValue(
+        project.endDate,
+      ),
+    });
+
+    setOpenActionProjectId(null);
+    setError("");
+    setSuccess("");
+  }
+
+  function closeEditModal(): void {
+    if (updating) {
+      return;
+    }
+
+    setEditingProject(null);
+    setForm(emptyForm);
+  }
+
+  function validateForm(): boolean {
     if (form.name.trim().length < 2) {
       setError(
         "Project name must contain at least 2 characters.",
       );
-      return;
+      return false;
     }
 
     if (
       form.startDate &&
       form.endDate &&
-      new Date(form.endDate) < new Date(form.startDate)
+      new Date(form.endDate) <
+        new Date(form.startDate)
     ) {
       setError(
-        "The end date cannot be before the start date.",
+        "End date cannot be before the start date.",
       );
+      return false;
+    }
+
+    return true;
+  }
+
+  async function handleCreate(
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> {
+    event.preventDefault();
+
+    if (!validateForm()) {
       return;
     }
 
@@ -346,541 +318,793 @@ export default function ProjectManagerProjectsPage() {
     setError("");
     setSuccess("");
 
-    const requestBody: Record<string, string> = {
+    const payload: CreateProjectPayload = {
       name: form.name.trim(),
-      description: form.description.trim(),
+      description:
+        form.description.trim() || undefined,
+      status: form.status,
     };
 
     if (form.startDate) {
-      requestBody.startDate = new Date(
+      payload.startDate = new Date(
         `${form.startDate}T00:00:00`,
       ).toISOString();
     }
 
     if (form.endDate) {
-      requestBody.endDate = new Date(
+      payload.endDate = new Date(
         `${form.endDate}T23:59:59`,
       ).toISOString();
     }
 
     try {
-      const response = await fetch(`${API_URL}/projects`, {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
-      });
+      const createdProject =
+        await createProject(payload);
 
-      const body = (await response.json()) as
-        | Project
-        | ApiErrorResponse;
+      setProjects((currentProjects) => [
+        createdProject,
+        ...currentProjects,
+      ]);
 
-      if (!response.ok) {
-        throw new Error(
-          getErrorMessage(
-            body as ApiErrorResponse,
-            "Failed to create project.",
-          ),
-        );
-      }
-
+      setForm(emptyForm);
       setShowCreateModal(false);
-      setForm(initialForm);
-      setSuccess("Project created successfully.");
 
-      await loadProjects();
+      setSuccess(
+        "Project created successfully.",
+      );
     } catch (caughtError: unknown) {
       setError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Failed to create project.",
+        getErrorMessage(
+          caughtError,
+          "Failed to create project.",
+        ),
       );
     } finally {
       setCreating(false);
     }
   }
 
+  async function handleUpdate(
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> {
+    event.preventDefault();
+
+    if (!editingProject) {
+      return;
+    }
+
+    if (!validateForm()) {
+      return;
+    }
+
+    setUpdating(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const updatedProject =
+        await updateProject(
+          editingProject.id,
+          {
+            name: form.name.trim(),
+            description:
+              form.description.trim(),
+            status: form.status,
+            startDate: form.startDate
+              ? new Date(
+                  `${form.startDate}T00:00:00`,
+                ).toISOString()
+              : null,
+            endDate: form.endDate
+              ? new Date(
+                  `${form.endDate}T23:59:59`,
+                ).toISOString()
+              : null,
+          },
+        );
+
+      setProjects((currentProjects) =>
+        currentProjects.map((project) =>
+          project.id ===
+          updatedProject.id
+            ? updatedProject
+            : project,
+        ),
+      );
+
+      setEditingProject(null);
+      setForm(emptyForm);
+
+      setSuccess(
+        "Project updated successfully.",
+      );
+    } catch (caughtError: unknown) {
+      setError(
+        getErrorMessage(
+          caughtError,
+          "Failed to update project.",
+        ),
+      );
+    } finally {
+      setUpdating(false);
+    }
+  }
+
+  async function handleMarkCompleted(
+    project: Project,
+  ): Promise<void> {
+    if (project.status === "completed") {
+      setOpenActionProjectId(null);
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Mark "${project.name}" as completed?`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setCompletingProjectId(project.id);
+    setOpenActionProjectId(null);
+    setError("");
+    setSuccess("");
+
+    try {
+      const updatedProject =
+        await updateProject(project.id, {
+          status: "completed",
+        });
+
+      setProjects((currentProjects) =>
+        currentProjects.map(
+          (currentProject) =>
+            currentProject.id === project.id
+              ? updatedProject
+              : currentProject,
+        ),
+      );
+
+      setSuccess(
+        `${project.name} was marked as completed.`,
+      );
+    } catch (caughtError: unknown) {
+      setError(
+        getErrorMessage(
+          caughtError,
+          "Failed to complete project.",
+        ),
+      );
+    } finally {
+      setCompletingProjectId(null);
+    }
+  }
+
+  async function handleDelete(
+    project: Project,
+  ): Promise<void> {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${project.name}"?\n\nThis may also remove related memberships and tasks. This action cannot be undone.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingProjectId(project.id);
+    setOpenActionProjectId(null);
+    setError("");
+    setSuccess("");
+
+    try {
+      await deleteProject(project.id);
+
+      setProjects((currentProjects) =>
+        currentProjects.filter(
+          (currentProject) =>
+            currentProject.id !== project.id,
+        ),
+      );
+
+      setSuccess(
+        `${project.name} was deleted successfully.`,
+      );
+    } catch (caughtError: unknown) {
+      setError(
+        getErrorMessage(
+          caughtError,
+          "Failed to delete project.",
+        ),
+      );
+    } finally {
+      setDeletingProjectId(null);
+    }
+  }
+
   if (loading) {
     return (
       <div className="p-8">
-        <h1 className="text-3xl font-bold text-gray-900">
-          My Projects
-        </h1>
-
-        <p className="mt-2 text-gray-500">
-          Manage your assigned projects and team members.
+        <p className="text-gray-500">
+          Loading projects...
         </p>
-
-        <div className="mt-8 rounded-xl border border-gray-200 bg-white p-10 text-center">
-          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-indigo-600" />
-
-          <p className="mt-4 text-sm text-gray-500">
-            Loading projects...
-          </p>
-        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-8">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+    <div
+      onClick={() =>
+        setOpenActionProjectId(null)
+      }
+    >
+      <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-2xl font-bold text-gray-900">
             My Projects
           </h1>
 
-          <p className="mt-2 text-gray-500">
-            Manage your projects, deadlines, and assigned
-            team members.
+          <p className="mt-1 text-gray-500">
+            Projects you manage and their
+            progress.
           </p>
         </div>
 
         <button
           type="button"
           onClick={openCreateModal}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-700"
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700"
         >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            className="h-5 w-5"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M12 5v14M5 12h14"
-            />
-          </svg>
-
+          <Plus className="h-4 w-4" />
           New Project
         </button>
       </div>
 
       {error && (
-        <div
-          role="alert"
-          className="mt-6 flex items-start justify-between gap-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-        >
+        <div className="mb-5 flex items-start justify-between gap-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <span>{error}</span>
 
           <button
             type="button"
             onClick={() => setError("")}
-            className="font-semibold"
           >
-            ×
+            <X className="h-4 w-4" />
           </button>
         </div>
       )}
 
       {success && (
-        <div
-          role="status"
-          className="mt-6 flex items-start justify-between gap-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"
-        >
+        <div className="mb-5 flex items-start justify-between gap-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
           <span>{success}</span>
 
           <button
             type="button"
-            onClick={() => setSuccess("")}
-            className="font-semibold"
+            onClick={() =>
+              setSuccess("")
+            }
           >
-            ×
+            <X className="h-4 w-4" />
           </button>
         </div>
       )}
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <p className="text-sm font-medium text-gray-500">
-            Total Projects
-          </p>
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Total Projects"
+          value={statistics.total}
+          icon={
+            <FolderOpen className="h-5 w-5 text-indigo-600" />
+          }
+        />
 
-          <p className="mt-2 text-3xl font-bold text-gray-900">
-            {projects.length}
-          </p>
-        </div>
+        <StatCard
+          label="Active"
+          value={statistics.active}
+          icon={
+            <FolderOpen className="h-5 w-5 text-emerald-600" />
+          }
+        />
 
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <p className="text-sm font-medium text-gray-500">
-            Active Projects
-          </p>
+        <StatCard
+          label="Completed"
+          value={statistics.completed}
+          icon={
+            <CheckCircle2 className="h-5 w-5 text-indigo-600" />
+          }
+        />
 
-          <p className="mt-2 text-3xl font-bold text-blue-600">
-            {activeProjects}
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <p className="text-sm font-medium text-gray-500">
-            Completed
-          </p>
-
-          <p className="mt-2 text-3xl font-bold text-green-600">
-            {completedProjects}
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <p className="text-sm font-medium text-gray-500">
-            Team Members
-          </p>
-
-          <p className="mt-2 text-3xl font-bold text-purple-600">
-            {totalMembers}
-          </p>
-        </div>
+        <StatCard
+          label="Team Members"
+          value={statistics.members}
+          icon={
+            <Users2 className="h-5 w-5 text-amber-600" />
+          }
+        />
       </div>
 
-      <div className="mt-8 rounded-xl border border-gray-200 bg-white">
-        <div className="flex flex-col justify-between gap-4 border-b border-gray-200 p-5 sm:flex-row sm:items-center">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">
-              Project list
-            </h2>
+      {projects.length === 0 ? (
+        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-sm">
+          <FolderOpen className="mx-auto h-10 w-10 text-gray-300" />
 
-            <p className="mt-1 text-sm text-gray-500">
-              {filteredProjects.length}{" "}
-              {filteredProjects.length === 1
-                ? "project"
-                : "projects"}
-            </p>
-          </div>
+          <p className="mt-3 text-gray-500">
+            You do not manage any projects yet.
+          </p>
 
-          <div className="flex gap-3">
-            <div className="relative">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400"
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="m21 21-4.35-4.35m1.35-5.65a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"
-                />
-              </svg>
-
-              <input
-                type="search"
-                value={search}
-                onChange={(event) =>
-                  setSearch(event.target.value)
-                }
-                placeholder="Search projects..."
-                className="w-full rounded-lg border border-gray-300 py-2 pl-10 pr-4 text-sm text-gray-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 sm:w-64"
-              />
-            </div>
-
-            <button
-              type="button"
-              onClick={() => void loadProjects(true)}
-              disabled={refreshing}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {refreshing ? "Refreshing..." : "Refresh"}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={openCreateModal}
+            className="mt-5 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white"
+          >
+            <Plus className="h-4 w-4" />
+            Create your first project
+          </button>
         </div>
-
-        {filteredProjects.length === 0 ? (
-          <div className="px-6 py-16 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-indigo-50">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                className="h-7 w-7 text-indigo-600"
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"
-                />
-              </svg>
-            </div>
-
-            <h3 className="mt-4 text-lg font-semibold text-gray-900">
-              {search
-                ? "No matching projects"
-                : "No projects yet"}
-            </h3>
-
-            <p className="mx-auto mt-2 max-w-md text-sm text-gray-500">
-              {search
-                ? "Try searching using another project name, description, or status."
-                : "Create your first project to begin assigning team members and managing tasks."}
-            </p>
-
-            {!search && (
-              <button
-                type="button"
-                onClick={openCreateModal}
-                className="mt-5 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-indigo-700"
-              >
-                Create Project
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="grid gap-5 p-5 md:grid-cols-2 xl:grid-cols-3">
-            {filteredProjects.map((project) => (
-              <article
-                key={project.id}
-                className="flex flex-col rounded-xl border border-gray-200 bg-white p-5 transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-indigo-100 text-lg font-bold text-indigo-700">
-                    {getInitials(project.name)}
-                  </div>
-
-                  <span
-                    className={`rounded-full px-2.5 py-1 text-xs font-semibold ${getStatusClasses(
-                      project.status,
-                    )}`}
-                  >
-                    {formatStatus(project.status)}
-                  </span>
+      ) : (
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {projects.map((project) => (
+            <article
+              key={project.id}
+              className="relative rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:border-indigo-200 hover:shadow-md"
+            >
+              <div className="mb-4 flex items-start justify-between">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-50">
+                  <FolderOpen className="h-5 w-5 text-indigo-600" />
                 </div>
 
-                <h3 className="mt-4 text-lg font-semibold text-gray-900">
-                  {project.name}
-                </h3>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                      statusStyles[
+                        project.status
+                      ]
+                    }`}
+                  >
+                    {
+                      statusLabels[
+                        project.status
+                      ]
+                    }
+                  </span>
 
-                <p className="mt-2 line-clamp-2 min-h-10 text-sm text-gray-500">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+
+                      setOpenActionProjectId(
+                        (currentId) =>
+                          currentId === project.id
+                            ? null
+                            : project.id,
+                      );
+                    }}
+                    className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                    aria-label={`Actions for ${project.name}`}
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              {openActionProjectId ===
+                project.id && (
+                <div
+                  onClick={(event) =>
+                    event.stopPropagation()
+                  }
+                  className="absolute right-5 top-16 z-50 w-56 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl"
+                >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      router.push(
+                        `/pm/projects/${project.id}`,
+                      )
+                    }
+                    className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    <Eye className="h-4 w-4" />
+                    View project
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openEditModal(project)
+                    }
+                    className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit project
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void handleMarkCompleted(
+                        project,
+                      )
+                    }
+                    disabled={
+                      project.status ===
+                        "completed" ||
+                      completingProjectId ===
+                        project.id
+                    }
+                    className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+
+                    {project.status ===
+                    "completed"
+                      ? "Already completed"
+                      : completingProjectId ===
+                          project.id
+                        ? "Updating..."
+                        : "Mark as completed"}
+                  </button>
+
+                  <div className="my-1 border-t border-gray-100" />
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void handleDelete(project)
+                    }
+                    disabled={
+                      deletingProjectId ===
+                      project.id
+                    }
+                    className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+
+                    {deletingProjectId ===
+                    project.id
+                      ? "Deleting..."
+                      : "Delete project"}
+                  </button>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(
+                    `/pm/projects/${project.id}`,
+                  )
+                }
+                className="block w-full text-left"
+              >
+                <h2 className="text-lg font-semibold text-gray-900">
+                  {project.name}
+                </h2>
+
+                <p className="mt-2 min-h-10 text-sm text-gray-500">
                   {project.description ||
-                    "No project description provided."}
+                    "No description provided."}
                 </p>
 
                 <div className="mt-5 space-y-3 border-t border-gray-100 pt-4">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">
-                      Start date
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="flex items-center gap-1.5 text-gray-400">
+                      <CalendarDays className="h-3.5 w-3.5" />
+                      Schedule
                     </span>
 
-                    <span className="font-medium text-gray-700">
-                      {formatDate(project.startDate)}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">
-                      End date
-                    </span>
-
-                    <span className="font-medium text-gray-700">
-                      {formatDate(project.endDate)}
+                    <span className="font-medium text-gray-600">
+                      {formatDate(
+                        project.startDate,
+                      )}{" "}
+                      –{" "}
+                      {formatDate(
+                        project.endDate,
+                      )}
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">
-                      Members
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="flex items-center gap-1.5 text-gray-400">
+                      <Users2 className="h-3.5 w-3.5" />
+                      {project.members?.length ??
+                        0}{" "}
+                      members
                     </span>
 
-                    <span className="font-medium text-gray-700">
-                      {project.members?.length ?? 0}
+                    <span className="font-medium text-indigo-600">
+                      View project
                     </span>
                   </div>
                 </div>
-
-                <div className="mt-5">
-                  <Link
-                    href={`/pm/projects/${project.id}`}
-                    className="inline-flex w-full items-center justify-center rounded-lg border border-indigo-200 px-4 py-2.5 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
-                  >
-                    View Project
-                  </Link>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {showCreateModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="create-project-title"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              closeCreateModal();
-            }
-          }}
-        >
-          <div className="w-full max-w-xl rounded-2xl bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-5">
-              <div>
-                <h2
-                  id="create-project-title"
-                  className="text-xl font-semibold text-gray-900"
-                >
-                  Create new project
-                </h2>
-
-                <p className="mt-1 text-sm text-gray-500">
-                  Enter the initial project information.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={closeCreateModal}
-                disabled={creating}
-                className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                aria-label="Close"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  className="h-5 w-5"
-                  aria-hidden="true"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M6 18 18 6M6 6l12 12"
-                  />
-                </svg>
               </button>
-            </div>
-
-            <form
-              onSubmit={handleCreateProject}
-              className="space-y-5 p-6"
-            >
-              <div>
-                <label
-                  htmlFor="project-name"
-                  className="mb-2 block text-sm font-medium text-gray-700"
-                >
-                  Project name
-                </label>
-
-                <input
-                  id="project-name"
-                  type="text"
-                  value={form.name}
-                  onChange={(event) =>
-                    updateForm("name", event.target.value)
-                  }
-                  minLength={2}
-                  required
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-                  placeholder="Enter project name"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="project-description"
-                  className="mb-2 block text-sm font-medium text-gray-700"
-                >
-                  Description
-                </label>
-
-                <textarea
-                  id="project-description"
-                  value={form.description}
-                  onChange={(event) =>
-                    updateForm(
-                      "description",
-                      event.target.value,
-                    )
-                  }
-                  rows={4}
-                  className="w-full resize-none rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-                  placeholder="Describe the project"
-                />
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label
-                    htmlFor="project-start-date"
-                    className="mb-2 block text-sm font-medium text-gray-700"
-                  >
-                    Start date
-                  </label>
-
-                  <input
-                    id="project-start-date"
-                    type="date"
-                    value={form.startDate}
-                    onChange={(event) =>
-                      updateForm(
-                        "startDate",
-                        event.target.value,
-                      )
-                    }
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-                  />
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="project-end-date"
-                    className="mb-2 block text-sm font-medium text-gray-700"
-                  >
-                    End date
-                  </label>
-
-                  <input
-                    id="project-end-date"
-                    type="date"
-                    value={form.endDate}
-                    min={form.startDate || undefined}
-                    onChange={(event) =>
-                      updateForm(
-                        "endDate",
-                        event.target.value,
-                      )
-                    }
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 border-t border-gray-100 pt-5">
-                <button
-                  type="button"
-                  onClick={closeCreateModal}
-                  disabled={creating}
-                  className="rounded-lg border border-gray-300 px-5 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-60"
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {creating
-                    ? "Creating..."
-                    : "Create Project"}
-                </button>
-              </div>
-            </form>
-          </div>
+            </article>
+          ))}
         </div>
       )}
+
+      {showCreateModal && (
+        <ProjectModal
+          title="Create new project"
+          description="Create a project for your team."
+          form={form}
+          saving={creating}
+          submitLabel="Create Project"
+          onClose={closeCreateModal}
+          onSubmit={handleCreate}
+          onChange={updateForm}
+        />
+      )}
+
+      {editingProject && (
+        <ProjectModal
+          title="Edit project"
+          description={`Update ${editingProject.name}.`}
+          form={form}
+          saving={updating}
+          submitLabel="Save Changes"
+          onClose={closeEditModal}
+          onSubmit={handleUpdate}
+          onChange={updateForm}
+        />
+      )}
+    </div>
+  );
+}
+
+function ProjectModal({
+  title,
+  description,
+  form,
+  saving,
+  submitLabel,
+  onClose,
+  onSubmit,
+  onChange,
+}: {
+  title: string;
+  description: string;
+  form: ProjectForm;
+  saving: boolean;
+  submitLabel: string;
+  onClose: () => void;
+  onSubmit: (
+    event: FormEvent<HTMLFormElement>,
+  ) => Promise<void>;
+  onChange: <
+    K extends keyof ProjectForm,
+  >(
+    field: K,
+    value: ProjectForm[K],
+  ) => void;
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4"
+      onMouseDown={(event) => {
+        if (
+          event.target === event.currentTarget
+        ) {
+          onClose();
+        }
+      }}
+    >
+      <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-5">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">
+              {title}
+            </h2>
+
+            <p className="mt-1 text-sm text-gray-500">
+              {description}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 disabled:opacity-50"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form
+          onSubmit={(event) =>
+            void onSubmit(event)
+          }
+          className="space-y-5 p-6"
+        >
+          <div>
+            <label
+              htmlFor="project-name"
+              className="mb-2 block text-sm font-medium text-gray-700"
+            >
+              Project name
+            </label>
+
+            <input
+              id="project-name"
+              type="text"
+              value={form.name}
+              onChange={(event) =>
+                onChange(
+                  "name",
+                  event.target.value,
+                )
+              }
+              minLength={2}
+              required
+              className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              placeholder="Enter project name"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="project-description"
+              className="mb-2 block text-sm font-medium text-gray-700"
+            >
+              Description
+            </label>
+
+            <textarea
+              id="project-description"
+              rows={3}
+              value={form.description}
+              onChange={(event) =>
+                onChange(
+                  "description",
+                  event.target.value,
+                )
+              }
+              className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              placeholder="Describe the project"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="project-status"
+              className="mb-2 block text-sm font-medium text-gray-700"
+            >
+              Status
+            </label>
+
+            <select
+              id="project-status"
+              value={form.status}
+              onChange={(event) =>
+                onChange(
+                  "status",
+                  event.target
+                    .value as ProjectStatus,
+                )
+              }
+              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            >
+              <option value="planning">
+                Planning
+              </option>
+              <option value="active">
+                Active
+              </option>
+              <option value="on_hold">
+                On Hold
+              </option>
+              <option value="completed">
+                Completed
+              </option>
+              <option value="archived">
+                Archived
+              </option>
+            </select>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label
+                htmlFor="project-start-date"
+                className="mb-2 block text-sm font-medium text-gray-700"
+              >
+                Start date
+              </label>
+
+              <input
+                id="project-start-date"
+                type="date"
+                value={form.startDate}
+                onChange={(event) =>
+                  onChange(
+                    "startDate",
+                    event.target.value,
+                  )
+                }
+                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="project-end-date"
+                className="mb-2 block text-sm font-medium text-gray-700"
+              >
+                End date
+              </label>
+
+              <input
+                id="project-end-date"
+                type="date"
+                value={form.endDate}
+                min={
+                  form.startDate || undefined
+                }
+                onChange={(event) =>
+                  onChange(
+                    "endDate",
+                    event.target.value,
+                  )
+                }
+                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 border-t border-gray-100 pt-5">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="rounded-lg border border-gray-300 px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {saving
+                ? "Saving..."
+                : submitLabel}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
+            {label}
+          </p>
+
+          <p className="mt-2 text-3xl font-bold text-gray-900">
+            {value}
+          </p>
+        </div>
+
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-50">
+          {icon}
+        </div>
+      </div>
     </div>
   );
 }
