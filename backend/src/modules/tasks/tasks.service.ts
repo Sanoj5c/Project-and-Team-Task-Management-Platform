@@ -1,18 +1,19 @@
 import {
+  BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
-  ForbiddenException,
-  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Task } from './entities/task.entity';
-import { Project } from '../projects/entities/project.entity';
+
+import type { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import { Role } from '../../common/enums/role.enum';
 import { ProjectMember } from '../projects/entities/project-member.entity';
+import { Project } from '../projects/entities/project.entity';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
-import { Role } from '../../common/enums/role.enum';
-import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import { Task } from './entities/task.entity';
 
 @Injectable()
 export class TasksService {
@@ -32,6 +33,7 @@ export class TasksService {
     const project = await this.projectsRepository.findOne({
       where: { id: dto.projectId },
     });
+
     if (!project) {
       throw new NotFoundException(`Project with id ${dto.projectId} not found`);
     }
@@ -47,12 +49,13 @@ export class TasksService {
       description: dto.description,
       status: dto.status,
       priority: dto.priority,
-      dueDate: dto.dueDate as any,
+      dueDate: dto.dueDate,
       projectId: dto.projectId,
       assigneeId: dto.assigneeId,
     });
 
     const saved = await this.tasksRepository.save(task);
+
     return this.findOne(saved.id, currentUser);
   }
 
@@ -64,9 +67,11 @@ export class TasksService {
       where: { id: projectId },
       relations: ['members'],
     });
+
     if (!project) {
       throw new NotFoundException(`Project with id ${projectId} not found`);
     }
+
     this.assertProjectReadAccess(project, currentUser);
 
     return this.tasksRepository.find({
@@ -76,7 +81,6 @@ export class TasksService {
     });
   }
 
-  // "My tasks" view — useful mainly for Team Members
   findAllForCurrentUser(currentUser: CurrentUserPayload): Promise<Task[]> {
     return this.tasksRepository.find({
       where: { assigneeId: currentUser.userId },
@@ -90,11 +94,13 @@ export class TasksService {
       where: { id },
       relations: ['assignee', 'project', 'project.members'],
     });
+
     if (!task) {
       throw new NotFoundException(`Task with id ${id} not found`);
     }
 
     this.assertProjectReadAccess(task.project, currentUser);
+
     return task;
   }
 
@@ -104,6 +110,7 @@ export class TasksService {
     currentUser: CurrentUserPayload,
   ): Promise<Task> {
     const task = await this.findOne(id, currentUser);
+
     this.assertProjectManageAccess(task.project, currentUser);
 
     if (dto.assigneeId) {
@@ -115,15 +122,15 @@ export class TasksService {
       description: dto.description ?? task.description,
       status: dto.status ?? task.status,
       priority: dto.priority ?? task.priority,
-      dueDate: (dto.dueDate as any) ?? task.dueDate,
+      dueDate: dto.dueDate ?? task.dueDate,
       assigneeId: dto.assigneeId ?? task.assigneeId,
     });
 
     await this.tasksRepository.save(task);
+
     return this.findOne(id, currentUser);
   }
 
-  // Team Members are only permitted to update the status of tasks assigned to them
   async updateStatus(
     id: string,
     status: string,
@@ -135,6 +142,7 @@ export class TasksService {
       currentUser.role === Role.ADMIN ||
       (currentUser.role === Role.PROJECT_MANAGER &&
         task.project.managerId === currentUser.userId);
+
     const isAssignee = task.assigneeId === currentUser.userId;
 
     if (!isManager && !isAssignee) {
@@ -143,21 +151,29 @@ export class TasksService {
       );
     }
 
-    task.status = status as any;
+    task.status = status as Task['status'];
+
     await this.tasksRepository.save(task);
+
     return this.findOne(id, currentUser);
   }
 
   async remove(id: string, currentUser: CurrentUserPayload): Promise<void> {
     const task = await this.findOne(id, currentUser);
+
     this.assertProjectManageAccess(task.project, currentUser);
+
     await this.tasksRepository.remove(task);
   }
 
-  private async assertAssigneeIsMember(projectId: string, userId: string) {
+  private async assertAssigneeIsMember(
+    projectId: string,
+    userId: string,
+  ): Promise<void> {
     const membership = await this.membersRepository.findOne({
       where: { projectId, userId },
     });
+
     if (!membership) {
       throw new BadRequestException('Assignee must be a member of the project');
     }
@@ -166,17 +182,22 @@ export class TasksService {
   private assertProjectReadAccess(
     project: Project,
     currentUser: CurrentUserPayload,
-  ) {
-    if (currentUser.role === Role.ADMIN) return;
+  ): void {
+    if (currentUser.role === Role.ADMIN) {
+      return;
+    }
+
     if (
       currentUser.role === Role.PROJECT_MANAGER &&
       project.managerId === currentUser.userId
     ) {
       return;
     }
+
     const isMember = project.members?.some(
-      (m) => m.userId === currentUser.userId,
+      (member) => member.userId === currentUser.userId,
     );
+
     if (!isMember) {
       throw new ForbiddenException('You do not have access to this project');
     }
@@ -185,14 +206,18 @@ export class TasksService {
   private assertProjectManageAccess(
     project: Project,
     currentUser: CurrentUserPayload,
-  ) {
-    if (currentUser.role === Role.ADMIN) return;
+  ): void {
+    if (currentUser.role === Role.ADMIN) {
+      return;
+    }
+
     if (
       currentUser.role === Role.PROJECT_MANAGER &&
       project.managerId === currentUser.userId
     ) {
       return;
     }
+
     throw new ForbiddenException(
       'Only the assigned Project Manager or an Admin can manage tasks in this project',
     );

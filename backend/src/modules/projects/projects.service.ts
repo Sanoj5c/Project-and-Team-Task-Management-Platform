@@ -1,17 +1,18 @@
 import {
+  ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
-  ForbiddenException,
-  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Project } from './entities/project.entity';
-import { ProjectMember } from './entities/project-member.entity';
+
+import type { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import { Role } from '../../common/enums/role.enum';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
-import { Role } from '../../common/enums/role.enum';
-import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import { ProjectMember } from './entities/project-member.entity';
+import { Project } from './entities/project.entity';
 
 @Injectable()
 export class ProjectsService {
@@ -30,8 +31,8 @@ export class ProjectsService {
       name: dto.name,
       description: dto.description,
       status: dto.status,
-      startDate: dto.startDate as any,
-      endDate: dto.endDate as any,
+      startDate: dto.startDate,
+      endDate: dto.endDate,
       managerId: currentUser.userId,
     });
 
@@ -53,12 +54,15 @@ export class ProjectsService {
       .orderBy('project.createdAt', 'DESC');
 
     if (currentUser.role === Role.ADMIN) {
-      // Admin sees everything, no filter
+      // Admin can view every project.
     } else if (currentUser.role === Role.PROJECT_MANAGER) {
-      qb.where('project.managerId = :userId', { userId: currentUser.userId });
+      qb.where('project.managerId = :userId', {
+        userId: currentUser.userId,
+      });
     } else {
-      // Team member: only projects they belong to
-      qb.andWhere('memberUser.id = :userId', { userId: currentUser.userId });
+      qb.andWhere('memberUser.id = :userId', {
+        userId: currentUser.userId,
+      });
     }
 
     return qb.getMany();
@@ -75,6 +79,7 @@ export class ProjectsService {
     }
 
     this.assertReadAccess(project, currentUser);
+
     return project;
   }
 
@@ -84,14 +89,15 @@ export class ProjectsService {
     currentUser: CurrentUserPayload,
   ): Promise<Project> {
     const project = await this.findOne(id, currentUser);
+
     this.assertManageAccess(project, currentUser);
 
     Object.assign(project, {
       name: dto.name ?? project.name,
       description: dto.description ?? project.description,
       status: dto.status ?? project.status,
-      startDate: (dto.startDate as any) ?? project.startDate,
-      endDate: (dto.endDate as any) ?? project.endDate,
+      startDate: dto.startDate ?? project.startDate,
+      endDate: dto.endDate ?? project.endDate,
     });
 
     await this.projectsRepository.save(project);
@@ -106,7 +112,9 @@ export class ProjectsService {
 
   async remove(id: string, currentUser: CurrentUserPayload): Promise<void> {
     const project = await this.findOne(id, currentUser);
+
     this.assertManageAccess(project, currentUser);
+
     await this.projectsRepository.remove(project);
   }
 
@@ -114,19 +122,26 @@ export class ProjectsService {
     projectId: string,
     userId: string,
     currentUser: CurrentUserPayload,
-  ) {
+  ): Promise<Project> {
     const project = await this.findOne(projectId, currentUser);
+
     this.assertManageAccess(project, currentUser);
 
     const existing = await this.membersRepository.findOne({
       where: { projectId, userId },
     });
+
     if (existing) {
       throw new ConflictException('User is already a member of this project');
     }
 
-    const member = this.membersRepository.create({ projectId, userId });
+    const member = this.membersRepository.create({
+      projectId,
+      userId,
+    });
+
     await this.membersRepository.save(member);
+
     return this.findOne(projectId, currentUser);
   }
 
@@ -134,33 +149,54 @@ export class ProjectsService {
     projectId: string,
     userId: string,
     currentUser: CurrentUserPayload,
-  ) {
+  ): Promise<Project> {
     const project = await this.findOne(projectId, currentUser);
+
     this.assertManageAccess(project, currentUser);
 
-    await this.membersRepository.delete({ projectId, userId });
+    await this.membersRepository.delete({
+      projectId,
+      userId,
+    });
+
     return this.findOne(projectId, currentUser);
   }
 
-  private async addMembers(projectId: string, memberIds: string[]) {
+  private async addMembers(
+    projectId: string,
+    memberIds: string[],
+  ): Promise<void> {
     const uniqueIds = [...new Set(memberIds)];
+
     const members = uniqueIds.map((userId) =>
-      this.membersRepository.create({ projectId, userId }),
+      this.membersRepository.create({
+        projectId,
+        userId,
+      }),
     );
+
     await this.membersRepository.save(members);
   }
 
-  private assertReadAccess(project: Project, currentUser: CurrentUserPayload) {
-    if (currentUser.role === Role.ADMIN) return;
+  private assertReadAccess(
+    project: Project,
+    currentUser: CurrentUserPayload,
+  ): void {
+    if (currentUser.role === Role.ADMIN) {
+      return;
+    }
+
     if (
       currentUser.role === Role.PROJECT_MANAGER &&
       project.managerId === currentUser.userId
     ) {
       return;
     }
+
     const isMember = project.members?.some(
-      (m) => m.userId === currentUser.userId,
+      (member) => member.userId === currentUser.userId,
     );
+
     if (!isMember) {
       throw new ForbiddenException('You do not have access to this project');
     }
@@ -169,14 +205,18 @@ export class ProjectsService {
   private assertManageAccess(
     project: Project,
     currentUser: CurrentUserPayload,
-  ) {
-    if (currentUser.role === Role.ADMIN) return;
+  ): void {
+    if (currentUser.role === Role.ADMIN) {
+      return;
+    }
+
     if (
       currentUser.role === Role.PROJECT_MANAGER &&
       project.managerId === currentUser.userId
     ) {
       return;
     }
+
     throw new ForbiddenException(
       'Only the assigned Project Manager or an Admin can manage this project',
     );

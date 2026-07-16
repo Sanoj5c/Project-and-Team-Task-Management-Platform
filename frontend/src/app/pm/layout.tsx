@@ -29,6 +29,7 @@ export default function PmLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -102,9 +103,21 @@ export default function PmLayout({
           </div>
 
           <div className="flex items-center gap-5">
-            <button className="relative text-gray-500 hover:text-gray-700">
-              <Bell className="w-5 h-5" />
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowNotifications((v) => !v)}
+                className="relative text-gray-500 hover:text-gray-700"
+              >
+                <Bell className="w-5 h-5" />
+              </button>
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-100 p-4 z-50">
+                  <p className="text-sm text-gray-500 text-center">
+                    No new notifications
+                  </p>
+                </div>
+              )}
+            </div>
             <button
               onClick={handleLogout}
               className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-red-600"
