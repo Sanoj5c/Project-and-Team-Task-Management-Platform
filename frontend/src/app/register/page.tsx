@@ -12,7 +12,10 @@ import {
   EyeOff,
 } from "lucide-react";
 
-import { register } from "@/lib/auth-api";
+import {
+  clearAuthSession,
+  register,
+} from "@/lib/auth-api";
 
 type ApiErrorResponse = {
   message?: string | string[];
@@ -95,11 +98,17 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
+      // Remove any previously saved login session.
+      clearAuthSession();
+
       await register({
         name: trimmedName,
         email: trimmedEmail,
         password,
       });
+
+      // Make sure registration does not keep any tokens.
+      clearAuthSession();
 
       setSuccess(
         "Account created successfully. Redirecting to login...",
@@ -115,7 +124,7 @@ export default function RegisterPage() {
             trimmedEmail,
           )}`,
         );
-      }, 1200);
+      }, 1000);
     } catch (caughtError: unknown) {
       setError(
         getErrorMessage(
